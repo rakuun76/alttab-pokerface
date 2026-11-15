@@ -200,11 +200,6 @@
 
         <!-- 교수님 캐릭터 & 상태 말풍선 (중앙 배치) -->
         <div id="professorContainer" class="absolute bottom-1 flex flex-col items-center z-10 transition-transform duration-150">
-          <!-- 예고 남은 시간 게이지 (예고 시 교수님 머리 위에 표시) -->
-          <div id="warningGaugeWrap" class="hidden w-24 h-2 bg-slate-900/80 rounded-full p-0.5 mb-1 border border-white/70 shadow-sm overflow-hidden">
-            <div id="warningGaugeBar" class="h-full w-full bg-amber-300 rounded-full"></div>
-          </div>
-
           <!-- 상태 말풍선 / 경고 아이콘 -->
           <div id="profBubble" class="mb-1 px-3 py-1 rounded-full text-xs font-extrabold shadow-md bg-white text-slate-700 border border-slate-200 flex items-center gap-1 whitespace-nowrap transition-all duration-150">
             <span id="profBubbleIcon">✍️</span>
@@ -646,25 +641,6 @@
         osc2.stop(now + 0.29);
       }
 
-      // 페이크 간파 안도 효과음
-      playFakeRelief() {
-        if (this.muted) return;
-        this.ensureRunning();
-        if (!this.ctx) return;
-        const now = this.ctx.currentTime;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(392, now);
-        osc.frequency.exponentialRampToValueAtTime(523.25, now + 0.14);
-        gain.gain.setValueAtTime(0.18, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.17);
-      }
-
       // 들켰을 때 충격음 (게임오버)
       playCaught() {
         if (this.muted) return;
@@ -777,7 +753,7 @@
       { role: "user", text: "한국사 대동법 핵심 1줄로 요약해줘" },
       { role: "ai", text: "집집마다 특산물을 걷던 공납을 토지 면적 기준(쌀·베·동전)으로 바꾼 조세 개혁입니다! ✨" },
       { role: "user", text: "교수님한테 안 들키고 딴짓하는 팁 알려줘" },
-      { role: "ai", text: "발소리와 화면 붉은 신호가 뜨면 0.5초 안에 즉시 손을 떼세요! 👀" },
+      { role: "ai", text: "붉은 신호 중 버티면 강심장 보너스 2배! 교수님이 고개를 돌리기 직전에 손을 떼세요! 💓" },
       { role: "user", text: "흑석동 점심 메뉴 3개만 추천해줘" },
       { role: "ai", text: "1) 310관 학식 돈가스 2) 중문 앞 김치찌개 3) 청룡연못 뷰 샌드위치 🍱" }
     ];
@@ -825,11 +801,10 @@
       holdDuration: 0,
       multiplier: 1,
 
-      // 교수님 AI 상태: 'WRITING' | 'WARNING' | 'LOOKING' | 'FAKE_RELIEF'
+      // 교수님 AI 상태: 'WRITING' | 'WARNING' | 'LOOKING'
       profState: 'WRITING',
       profTimer: 0,
       profNextDuration: 3.5,
-      isCurrentTurnFake: false,
 
       // 주기적 틱 타이머
       scoreTickAccum: 0,
@@ -858,8 +833,6 @@
       muteBtn: document.getElementById('muteBtn'),
 
       profContainer: document.getElementById('professorContainer'),
-      warningGaugeWrap: document.getElementById('warningGaugeWrap'),
-      warningGaugeBar: document.getElementById('warningGaugeBar'),
       profBubble: document.getElementById('profBubble'),
       profBubbleIcon: document.getElementById('profBubbleIcon'),
       profBubbleText: document.getElementById('profBubbleText'),
@@ -1079,7 +1052,7 @@
 
     /**
      * ============================================================================
-     * 교수님 상태 전이 및 난이도 곡선 (첫 10초 긴 예고 + 갈수록 짧아지는 예고 + 페이크)
+     * 교수님 상태 전이 및 난이도 곡선 (첫 15초 긴 예고 + 후반부 랜덤 예고)
      * ============================================================================
      */
     function setProfessorState(newState) {
@@ -1087,7 +1060,6 @@
       state.profTimer = 0;
 
       // 초기화
-      el.warningGaugeWrap.classList.add('hidden');
       el.warningRing.classList.add('hidden');
       el.profGlare.classList.add('hidden');
       el.profAvatar.style.transform = '';
@@ -1105,7 +1077,6 @@
         el.profBubbleIcon.textContent = '✍️';
         el.profBubbleText.textContent = '칠판 판서 중...';
 
-        // x3 배율(1.8초)을 충분히 누릴 수 있도록 여유 있는 판서 시간 제공
         if (state.elapsed < 15) {
           state.profNextDuration = 4.0;
         } else {
@@ -1116,15 +1087,11 @@
         }
 
       } else if (newState === 'WARNING') {
-        // 돌아보기 전 예고 신호 (발소리, 느낌표, 화면 가장자리 붉어짐, 심장박동, 카운트다운 게이지)
+        // 돌아보기 전 예고 신호 (발소리, 느낌표, 화면 가장자리 붉어짐, 심장박동)
         el.classroomArea.className = 'relative h-[34%] min-h-[185px] max-h-[250px] shrink-0 w-full bg-gradient-to-b from-rose-100 via-red-100 to-rose-200 border-b-4 border-rose-700 flex flex-col justify-between p-2.5 sm:p-3 overflow-hidden transition-colors duration-150';
         el.profFace.textContent = '🤔';
         el.profAvatar.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-rose-200 border-4 border-rose-600 shadow-lg flex items-center justify-center text-3xl sm:text-4xl relative';
         el.warningRing.classList.remove('hidden');
-
-        el.warningGaugeWrap.classList.remove('hidden');
-        el.warningGaugeBar.style.width = '100%';
-        el.warningGaugeBar.className = 'h-full w-full bg-amber-300 rounded-full';
 
         el.profBubble.className = 'mb-1 px-3.5 py-1 rounded-full text-xs font-black shadow-lg bg-rose-600 text-white border-2 border-white flex items-center gap-1 whitespace-nowrap animate-exclaim';
         el.profBubbleIcon.textContent = '❗';
@@ -1144,35 +1111,12 @@
         // 초반 15초는 여유로운 예고(2.6초), 이후 0.7~1.6초 범위에서 후반일수록 짧은 쪽이 자주 등장 (0.5초 미만 금지)
         if (state.elapsed < 15) {
           state.profNextDuration = 2.6;
-          state.isCurrentTurnFake = false;
         } else {
           const progress = Math.min(1, (state.elapsed - 15) / (ROUND_DURATION - 15));
           const skew = 1 + progress * 1.4;
           const randomFactor = Math.pow(Math.random(), skew);
           state.profNextDuration = Math.max(0.7, 0.7 + randomFactor * 0.9);
-          state.isCurrentTurnFake = state.elapsed >= 18 && Math.random() < 0.25;
         }
-
-      } else if (newState === 'FAKE_RELIEF') {
-        // 페이크 연출: 돌아보는 척만 하고 다시 칠판으로!
-        el.classroomArea.className = 'relative h-[34%] min-h-[185px] max-h-[250px] shrink-0 w-full bg-gradient-to-b from-emerald-50 via-teal-50 to-stone-200 border-b-4 border-slate-800 flex flex-col justify-between p-2.5 sm:p-3 overflow-hidden transition-colors duration-200';
-        el.profFace.textContent = '😅';
-        el.profAvatar.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-emerald-100 border-4 border-emerald-600 shadow-lg flex items-center justify-center text-3xl sm:text-4xl relative';
-        el.profBubble.className = 'mb-1 px-3 py-1 rounded-full text-xs font-extrabold shadow-md bg-emerald-600 text-white flex items-center gap-1 whitespace-nowrap';
-        el.profBubbleIcon.textContent = '💨';
-        el.profBubbleText.textContent = '휴... 페이크! (분필 줍는 중)';
-
-        sound.playFakeRelief();
-
-        // 페이크에도 속지 않고 딴짓을 유지 중이었다면 현재 배율에 비례한 보너스 지급
-        if (state.isHolding) {
-          const fakeBonus = 300 * state.multiplier;
-          state.score += fakeBonus;
-          updateScoreUI(true);
-          spawnFloatingText(`😎 페이크 간파 (x${state.multiplier})! +${fakeBonus}`, 'text-emerald-300');
-        }
-
-        state.profNextDuration = 0.85;
 
       } else if (newState === 'LOOKING') {
         // 실제 감시 중!
@@ -1191,19 +1135,25 @@
 
     /**
      * ============================================================================
-     * 학점(칭호) 계산 (중앙대 F, D, C, B, A, A+ 체제 · 플레이 리스크 기반 커트라인)
+     * 학점(칭호) 계산 (중앙대 F ~ A+ 9단계 세부 학점 체제)
      * ============================================================================
      */
     function calculateGrade(score, isWin) {
-      if (score >= 65000) {
+      if (score >= 62000) {
         return { letter: 'A+', title: '4.5 만점의 전설 · 310관 강심장 마스터' };
-      } else if (score >= 43000) {
+      } else if (score >= 56000) {
         return { letter: 'A', title: '포커페이스 장인 · 완벽한 이중생활' };
-      } else if (score >= 28000) {
+      } else if (score >= 51000) {
+        return { letter: 'B+', title: '강심장 우등생 · 붉은 신호도 즐기는 여유' };
+      } else if (score >= 45000) {
         return { letter: 'B', title: '눈치 백단 모범생 · 안정적인 학점 방어' };
-      } else if (score >= 16000) {
+      } else if (score >= 39000) {
+        return { letter: 'C+', title: '실속파 수강생 · 적당히 즐기고 무사 생존' };
+      } else if (score >= 32000) {
         return { letter: 'C', title: '평범한 생존자 · 출석에 의의를 둠' };
-      } else if (score >= 6000) {
+      } else if (score >= 24000) {
+        return { letter: 'D+', title: '아슬아슬 줄타기 · 간신히 C는 면함' };
+      } else if (score >= 15000) {
         return { letter: 'D', title: '학사경고 턱걸이 · 간신히 살아남음' };
       } else {
         return {
@@ -1364,7 +1314,6 @@
           }
         }
 
-        // 3. 누르고 있을 때 (딴짓 중): 연속 시간 누적, 배율 상승, 점수 증가
         // 3. 누르고 있을 때 (딴짓 중): 연속 시간 누적, 배율 상승, 점수 증가 (선택된 1개 앱 유지)
         if (state.isHolding) {
           state.holdDuration += dt;
@@ -1411,17 +1360,11 @@
         state.profTimer += dt;
 
         if (state.profState === 'WARNING') {
-          // 예고 남은 시간 비율(1 -> 0) 및 교수님 고개 돌림/게이지 업데이트
+          // 예고 진행 비율(0 -> 1)에 따른 교수님 고개 돌림 시각 연출
           const warnRatio = Math.max(0, 1 - state.profTimer / state.profNextDuration);
           const progress = 1 - warnRatio;
-          el.warningGaugeBar.style.width = `${(warnRatio * 100).toFixed(1)}%`;
-          if (warnRatio <= 0.35) {
-            el.warningGaugeBar.className = 'h-full bg-rose-500 rounded-full';
-          } else {
-            el.warningGaugeBar.className = 'h-full bg-amber-300 rounded-full';
-          }
 
-          // 교수님이 점점 돌아보는 시각 연출 (기울기·확대·시선 전환 예고)
+          // 교수님이 점점 돌아보는 시각 연출 (기울기·확대·표정 전환 예고)
           const tiltDeg = (progress * 14).toFixed(1);
           const scaleVal = (1.02 + progress * 0.08).toFixed(3);
           el.profAvatar.style.transform = `scale(${scaleVal}) rotate(${tiltDeg}deg)`;
@@ -1438,11 +1381,7 @@
           }
 
           if (state.profTimer >= state.profNextDuration) {
-            if (state.isCurrentTurnFake) {
-              setProfessorState('FAKE_RELIEF');
-            } else {
-              setProfessorState('LOOKING');
-            }
+            setProfessorState('LOOKING');
           }
         } else if (state.profState === 'LOOKING') {
           // 교수님이 쳐다보는 동안 딴짓 창이 떠 있으면 즉시 적발!
@@ -1452,10 +1391,6 @@
             return;
           }
 
-          if (state.profTimer >= state.profNextDuration) {
-            setProfessorState('WRITING');
-          }
-        } else if (state.profState === 'FAKE_RELIEF') {
           if (state.profTimer >= state.profNextDuration) {
             setProfessorState('WRITING');
           }
