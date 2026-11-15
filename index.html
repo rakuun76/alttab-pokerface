@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>알트탭 포커페이스 - 중앙대 310관 생존기</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      min-height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: none;
+      font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #0f172a;
+    }
+
+    /* 모바일 Safari/Chrome 주소창 높이에 대응하는 동적 뷰포트 높이 */
+    .app-viewport {
+      height: 100vh;
+      height: var(--app-height, 100dvh);
+    }
+
+    @media (min-width: 640px) {
+      .app-viewport {
+        height: min(92vh, 840px);
+      }
+    }
+
+    /* 화면 흔들림 (들켰을 때 & 긴장 연출) */
+    @keyframes heavyShake {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      15% { transform: translate(-10px, 6px) rotate(-1.5deg); }
+      30% { transform: translate(10px, -6px) rotate(1.5deg); }
+      45% { transform: translate(-8px, -4px) rotate(-1deg); }
+      60% { transform: translate(8px, 5px) rotate(1deg); }
+      75% { transform: translate(-5px, 3px) rotate(-0.5deg); }
+      90% { transform: translate(4px, -2px) rotate(0.5deg); }
+    }
+
+    .animate-caught-shake {
+      animation: heavyShake 0.48s cubic-bezier(.36,.07,.19,.97) both;
+    }
+
+    /* 점수 숫자 튀는 연출 */
+    @keyframes scorePop {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.24) translateY(-2px); }
+      100% { transform: scale(1) translateY(0); }
+    }
+
+    .animate-score-pop {
+      animation: scorePop 0.14s ease-out;
+    }
+
+    /* 배율 상승 펄스 */
+    @keyframes badgeBurst {
+      0% { transform: scale(0.85); }
+      50% { transform: scale(1.3); }
+      100% { transform: scale(1); }
+    }
+
+    .animate-badge-burst {
+      animation: badgeBurst 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* 예고 시 화면 가장자리 붉어짐 (심장박동 싱크) */
+    @keyframes dangerVignette {
+      0%, 100% {
+        box-shadow: inset 0 0 28px 8px rgba(239, 68, 68, 0.35);
+      }
+      50% {
+        box-shadow: inset 0 0 65px 22px rgba(220, 38, 38, 0.82);
+      }
+    }
+
+    .danger-vignette-active {
+      animation: dangerVignette 0.45s ease-in-out infinite;
+    }
+
+    /* 느낌표 바운스 */
+    @keyframes exclaimBounce {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-6px) scale(1.15); }
+    }
+
+    .animate-exclaim {
+      animation: exclaimBounce 0.35s ease-in-out infinite;
+    }
+
+    /* 미니게임(청룡 점프) 내부 애니메이션 */
+    @keyframes dragonHop {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      45% { transform: translateY(-34px) rotate(-12deg); }
+      65% { transform: translateY(-30px) rotate(8deg); }
+    }
+
+    @keyframes hurdleScroll {
+      0% { transform: translateX(220px); }
+      100% { transform: translateX(-80px); }
+    }
+
+    .animate-dragon-hop {
+      animation: dragonHop 0.75s cubic-bezier(0.28, 0.84, 0.42, 1) infinite;
+    }
+
+    .animate-hurdle {
+      animation: hurdleScroll 1.5s linear infinite;
+    }
+
+    /* Floating bonus toast */
+    @keyframes floatUpFade {
+      0% { opacity: 1; transform: translateY(0) scale(0.95); }
+      100% { opacity: 0; transform: translateY(-32px) scale(1.08); }
+    }
+
+    .animate-float-bonus {
+      animation: floatUpFade 0.95s ease-out forwards;
+    }
+
+    /* Tabular numbers for zero layout jitter */
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center bg-slate-950">
+
+  <!-- 메인 게임 컨테이너 (모바일 전체 화면 꽉 채움, 데스크톱 중앙 카드) -->
+  <div id="gameContainer" class="app-viewport relative w-full max-w-[440px] sm:rounded-[2rem] sm:border-4 sm:border-slate-800 bg-slate-900 shadow-2xl overflow-hidden flex flex-col">
+
+    <!-- 화면 가장자리 붉은 경고 오버레이 -->
+    <div id="dangerOverlay" class="pointer-events-none absolute inset-0 z-30 transition-opacity duration-150 opacity-0"></div>
+
+    <!-- 보너스/상태 플로팅 텍스트 컨테이너 -->
+    <div id="floatingLayer" class="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"></div>
+
+    <!-- ==========================================
+         1. 상단 영역: 310관 강의실 & 교수님 시선 상태 (약 34%)
+         ========================================== -->
+    <section id="classroomArea" class="relative h-[34%] min-h-[185px] max-h-[250px] shrink-0 w-full bg-gradient-to-b from-amber-50 via-stone-100 to-stone-200 border-b-4 border-slate-800 flex flex-col justify-between p-2.5 sm:p-3 overflow-hidden transition-colors duration-200">
+
+      <!-- 상단 HUD: 강의실 정보, 남은 시간, 음소거 버튼 -->
+      <div class="relative z-20 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-1.5 bg-slate-900/90 text-white px-2.5 py-1 rounded-full text-xs font-bold shadow">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>310관 · 한국사</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <!-- 남은 시간 타이머 -->
+          <div id="timerBox" class="bg-white/95 border border-slate-300 px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5">
+            <span class="text-xs text-slate-500 font-bold">종강까지</span>
+            <span id="timerText" class="text-sm font-black text-slate-900 tabular-nums">90.0s</span>
+          </div>
+
+          <!-- 음소거 버튼 (터치 전파 차단) -->
+          <button id="muteBtn" type="button" aria-label="음소거 전환"
+            class="w-9 h-9 rounded-full bg-white/95 border border-slate-300 shadow-sm flex items-center justify-center text-base active:scale-90 transition-transform cursor-pointer">
+            🔊
+          </button>
+        </div>
+      </div>
+
+      <!-- 강의실 전면 칠판 & 스크린 배경 디테일 -->
+      <div class="relative flex-1 flex items-end justify-center pt-1.5">
+        <!-- 화이트보드/칠판 (노트북 슬라이드와 내용 실시간 동기화) -->
+        <div class="w-[94%] h-[86%] bg-emerald-900 rounded-xl border-[5px] border-amber-800/80 shadow-inner p-2.5 flex flex-col justify-between relative overflow-hidden">
+          <!-- 칠판 판서 텍스트 -->
+          <div class="flex justify-between items-start text-white/85 text-[10px] leading-tight gap-2">
+            <div class="flex-1 min-w-0">
+              <p id="boardHeader" class="font-bold text-amber-200 truncate">[교양필수] 11주차 · 조선 후기 수취 체제</p>
+              <p id="boardBullet1" class="mt-0.5 text-white/75 truncate">· 대동법: 토지 결수 기준 쌀·베·동전 징수</p>
+              <p id="boardBullet2" class="text-white/75 truncate">· 균역법: 군포 1필 감면 및 결작 보충</p>
+            </div>
+            <div class="text-right text-white/55 font-mono text-[9px] shrink-0">
+              <p>전자출결 완료</p>
+              <p>310관 강의실</p>
+            </div>
+          </div>
+
+          <!-- 칠판 하단 분필 받침대 -->
+          <div class="w-full h-1.5 bg-amber-950/60 rounded-full"></div>
+        </div>
+
+        <!-- 교수님 캐릭터 & 상태 말풍선 (중앙 배치) -->
+        <div id="professorContainer" class="absolute bottom-1 flex flex-col items-center z-10 transition-transform duration-150">
+          <!-- 예고 남은 시간 게이지 (예고 시 교수님 머리 위에 표시) -->
+          <div id="warningGaugeWrap" class="hidden w-24 h-2 bg-slate-900/80 rounded-full p-0.5 mb-1 border border-white/70 shadow-sm overflow-hidden">
+            <div id="warningGaugeBar" class="h-full w-full bg-amber-300 rounded-full"></div>
+          </div>
+
+          <!-- 상태 말풍선 / 경고 아이콘 -->
+          <div id="profBubble" class="mb-1 px-3 py-1 rounded-full text-xs font-extrabold shadow-md bg-white text-slate-700 border border-slate-200 flex items-center gap-1 whitespace-nowrap transition-all duration-150">
+            <span id="profBubbleIcon">✍️</span>
+            <span id="profBubbleText">칠판 판서 중...</span>
+          </div>
+
+          <!-- 교수님 비주얼 (CSS 도형 + 이모지 조합) -->
+          <div class="relative flex flex-col items-center">
+            <!-- 경고 타이머 링 (예고 시 표시) -->
+            <div id="warningRing" class="hidden absolute -inset-2 rounded-full border-4 border-red-500 animate-ping opacity-60"></div>
+
+            <!-- 얼굴/이모지 (표정과 시선 아이콘 분리) -->
+            <div id="profAvatar" class="w-16 h-16 rounded-full bg-amber-100 border-4 border-slate-800 shadow-lg flex items-center justify-center text-4xl relative transition-transform duration-150">
+              <span id="profFace">👨‍🏫</span>
+              <!-- 돌아볼 때 시선 레이저/안경 반짝임 -->
+              <span id="profGlare" class="hidden absolute -bottom-1 -right-2 text-lg">👀</span>
+            </div>
+            <!-- 정장 상체 도형 -->
+            <div class="w-24 h-7 -mt-2 bg-slate-800 rounded-t-2xl border-x-2 border-t-2 border-slate-950 flex items-center justify-center">
+              <div class="w-2 h-4 bg-rose-600 rounded-b-sm"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 강의실 책상 상단 라인 -->
+      <div class="h-2 w-full bg-amber-900/20 rounded-full"></div>
+    </section>
+
+    <!-- ==========================================
+         2. 하단 영역: 내 노트북 화면 (약 66%)
+         ========================================== -->
+    <section class="relative flex-1 min-h-0 w-full bg-slate-800 p-2 sm:p-3.5 flex flex-col justify-between">
+      <!-- 노트북 베젤 프레임 -->
+      <div class="relative flex-1 w-full bg-slate-950 rounded-2xl p-2 border-2 border-slate-700 shadow-inner flex flex-col overflow-hidden">
+        <!-- 웹캠 도트 -->
+        <div class="w-full flex justify-center pb-1.5">
+          <div class="w-2 h-2 rounded-full bg-slate-700 flex items-center justify-center">
+            <div class="w-1 h-1 rounded-full bg-emerald-500/70"></div>
+          </div>
+        </div>
+
+        <!-- 실제 모니터 디스플레이 영역 -->
+        <div class="relative flex-1 w-full rounded-xl overflow-hidden bg-white flex flex-col">
+
+          <!-- 모니터 상단 점수 & 배율 상태 바 -->
+          <div class="bg-slate-900 text-white px-3 py-2 flex items-center justify-between border-b border-slate-800 z-10">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-bold text-slate-400">SCORE</span>
+              <span id="scoreText" class="text-xl sm:text-2xl font-black text-amber-400 tabular-nums tracking-tight">0</span>
+            </div>
+
+            <!-- 연속 딴짓 배율 게이지 -->
+            <div class="flex items-center gap-2">
+              <div class="w-20 h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                <div id="multGaugeBar" class="h-full w-0 bg-gradient-to-r from-sky-400 via-amber-400 to-rose-500 transition-all duration-100"></div>
+              </div>
+              <span id="multBadge" class="px-2.5 py-0.5 rounded-md text-xs font-black bg-slate-700 text-slate-200 tabular-nums">
+                x1
+              </span>
+            </div>
+          </div>
+
+          <!-- [화면 A] 강의 슬라이드 화면 (손을 뗐을 때 기본 화면) -->
+          <div id="lectureScreen" class="flex-1 min-h-0 bg-slate-50 p-3.5 sm:p-4 flex flex-col justify-between transition-opacity duration-75 overflow-y-auto">
+            <div>
+              <!-- 대학 PPT 헤더 스타일 -->
+              <div class="flex items-center justify-between border-b-2 border-blue-900 pb-2 mb-2.5">
+                <div>
+                  <span id="slideWeekBadge" class="inline-block px-2 py-0.5 bg-blue-900 text-white text-[10px] font-bold rounded mb-1">교양필수 · 11주차 강의안</span>
+                  <h2 id="slideTitle" class="text-sm sm:text-lg font-black text-slate-900 leading-snug">
+                    조선 후기 수취 체제의 개편과 사회 변동
+                  </h2>
+                </div>
+                <span class="text-2xl shrink-0 ml-2">📜</span>
+              </div>
+
+              <!-- 정적인 강의 슬라이드 본문 -->
+              <ul id="slideBullets" class="space-y-2 text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
+                <li class="flex items-start gap-2">
+                  <span class="text-blue-800 font-bold">1.</span>
+                  <span><strong>대동법의 실시:</strong> 공납의 폐단(방납)을 시정하기 위해 토지 결수에 따라 쌀·베·동전으로 징수함.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <span class="text-blue-800 font-bold">2.</span>
+                  <span><strong>균역법(영조):</strong> 농민의 군포 부담을 1년 2필에서 1필로 줄이고, 부족분은 결작과 선무군관포로 보충함.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                  <span class="text-blue-800 font-bold">3.</span>
+                  <span><strong>상품 화폐 경제:</strong> 모내기법(이앙법) 확산으로 생산력이 증대되고 상평통보가 전국적으로 유통됨.</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- 하단 안내 힌트 (터치 유도) -->
+            <div class="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between">
+              <div class="flex items-center gap-1.5 text-emerald-700 font-bold text-xs">
+                <span>🛡️</span>
+                <span>열공 위장 모드 (안전)</span>
+              </div>
+              <span class="text-xs font-extrabold text-blue-700 animate-pulse">
+                꾹 눌러서 딴짓하기 👆
+              </span>
+            </div>
+          </div>
+
+          <!-- [화면 B] 딴짓 창 화면 (누르고 있는 동안 활성화) -->
+          <div id="distractScreen" class="hidden flex-1 min-h-0 flex flex-col bg-slate-100 overflow-hidden">
+            <!-- 브라우저/창 상단 탭 표시줄 -->
+            <div class="bg-slate-200 px-2.5 py-1.5 flex items-center justify-between border-b border-slate-300">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span id="windowTitle" class="ml-1.5 text-xs font-extrabold text-slate-800">💬 동기 카톡방 (4)</span>
+              </div>
+              <span id="distractStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white animate-pulse">
+                딴짓 중 +점수!
+              </span>
+            </div>
+
+            <!-- 딴짓 콘텐츠 1: 카톡 대화 창 -->
+            <div id="appKakao" class="flex-1 bg-[#bacee0] p-3 flex flex-col justify-end gap-2 overflow-hidden">
+              <div id="kakaoMessages" class="space-y-2 flex flex-col">
+                <!-- JS로 한 줄씩 말풍선 추가 -->
+              </div>
+            </div>
+
+            <!-- 딴짓 콘텐츠 2: 제미나이와 대화 창 -->
+            <div id="appGemini" class="hidden flex-1 bg-slate-900 text-slate-100 p-3 flex flex-col justify-end gap-2.5 overflow-hidden">
+              <div id="geminiMessages" class="space-y-2.5 flex flex-col">
+                <!-- JS로 대화 한 줄씩 추가 -->
+              </div>
+            </div>
+
+            <!-- 딴짓 콘텐츠 3: 웹 미니게임 창 -->
+            <div id="appMiniGame" class="hidden flex-1 bg-gradient-to-b from-sky-400 to-sky-200 p-3 flex flex-col justify-between relative overflow-hidden">
+              <div class="flex justify-between items-center z-10">
+                <span class="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-xs shadow">🎮 미니게임 플레이 중!</span>
+                <span class="text-xs font-black text-white drop-shadow">청룡 대시 🐉</span>
+              </div>
+
+              <!-- 미니게임 트랙 -->
+              <div class="relative flex-1 flex items-end pb-4 overflow-hidden">
+                <!-- 구름 -->
+                <div class="absolute top-3 left-6 text-2xl opacity-80">☁️</div>
+                <div class="absolute top-6 right-8 text-xl opacity-70">☁️</div>
+                <!-- 점프하는 청룡 -->
+                <div class="text-4xl ml-6 animate-dragon-hop z-10">🐉</div>
+                <!-- 다가오는 장애물 -->
+                <div class="text-2xl absolute bottom-4 animate-hurdle">📚</div>
+                <!-- 코인 연출 -->
+                <div class="text-xl absolute top-10 left-20 animate-bounce">🪙</div>
+              </div>
+
+              <div class="h-4 w-full bg-emerald-600 rounded-md border-t-2 border-emerald-800"></div>
+            </div>
+
+            <!-- 하단 주의 바 -->
+            <div class="bg-rose-600 text-white text-center py-1 text-[11px] font-bold">
+              교수님 신호가 뜨면 즉시 손을 떼세요!
+            </div>
+          </div>
+
+          <!-- 모니터 하단 OS 작업표시줄 -->
+          <div class="bg-slate-900 text-slate-400 px-3 py-1 text-[10px] flex items-center justify-between border-t border-slate-800">
+            <div class="flex items-center gap-2">
+              <span class="px-1.5 py-0.5 bg-slate-800 text-slate-200 rounded font-mono font-bold">Alt+Tab</span>
+              <span id="osStatusText">한국사_11주차_강의안.pdf</span>
+            </div>
+            <span class="font-mono">CAU-WiFi 📶</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================
+         3. 시작 화면 오버레이 (제목 + "눌러서 딴짓 시작"만)
+         ========================================== -->
+    <div id="startOverlay" class="absolute inset-0 z-40 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center">
+      <div class="mb-6">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-300 text-xs font-bold mb-3">
+          <span>310관 강의실 생존기</span>
+        </div>
+        <h1 class="text-4xl sm:text-5xl font-black text-white tracking-tight leading-tight">
+          알트탭<br/>
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-orange-400 to-rose-400">포커페이스</span>
+        </h1>
+      </div>
+
+      <button id="startBtn" type="button"
+        class="w-full max-w-[280px] py-5 px-6 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black text-xl shadow-[0_8px_0_rgb(180,83,9)] active:translate-y-1 active:shadow-[0_4px_0_rgb(180,83,9)] transition-all cursor-pointer">
+        눌러서 딴짓 시작
+      </button>
+      <p class="mt-4 text-xs sm:text-sm font-bold text-slate-300 tracking-tight">
+        교수님이 돌아보기 직전까지 버틸수록 고득점!
+      </p>
+    </div>
+
+    <!-- ==========================================
+         4. 게임오버 / 종강 결과 화면 오버레이
+         ========================================== -->
+    <div id="endOverlay" class="hidden absolute inset-0 z-50 bg-slate-950/92 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
+      <!-- 결과 배지 (적발 vs 종강) -->
+      <div id="endBadge" class="px-4 py-1.5 rounded-full text-xs font-black mb-3 bg-rose-600 text-white">
+        🚨 교수님께 적발됨!
+      </div>
+
+      <!-- 교수님 대사 또는 종강 축하 메시지 -->
+      <p id="endMessage" class="text-lg sm:text-xl font-extrabold text-white mb-5 leading-snug max-w-[320px] break-keep">
+        "학생, 이름과 학번이 어떻게 되죠?"
+      </p>
+
+      <!-- 성적표 카드 (점수, 최고 기록, 칭호/학점) -->
+      <div class="w-full max-w-[320px] bg-slate-900 border-2 border-slate-700 rounded-3xl p-5 mb-6 shadow-xl">
+        <div class="text-xs font-bold text-slate-400 mb-1">최종 학점 칭호</div>
+        <div class="flex items-center justify-center gap-3 mb-2">
+          <span id="gradeLetter" class="text-6xl font-black text-amber-400">A+</span>
+        </div>
+        <div id="gradeTitle" class="text-sm font-extrabold text-slate-200 mb-4">
+          포커페이스 장인
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-4 border-t border-slate-800">
+          <div class="bg-slate-800/80 rounded-2xl p-3">
+            <div class="text-[11px] text-slate-400 font-bold">이번 점수</div>
+            <div id="finalScore" class="text-xl font-black text-white tabular-nums mt-0.5">0</div>
+          </div>
+          <div class="bg-slate-800/80 rounded-2xl p-3">
+            <div class="text-[11px] text-slate-400 font-bold">최고 기록</div>
+            <div id="bestScoreText" class="text-xl font-black text-emerald-400 tabular-nums mt-0.5">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 큰 다시 하기 버튼 -->
+      <button id="restartBtn" type="button"
+        class="w-full max-w-[320px] py-5 px-6 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black text-xl shadow-[0_8px_0_rgb(15,118,110)] active:translate-y-1 active:shadow-[0_4px_0_rgb(15,118,110)] transition-all cursor-pointer">
+        다시 하기
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    /**
+     * ============================================================================
+     * 모바일 Safari/Chrome 뷰포트 높이 실시간 보정 (화면 잘림 방지)
+     * ============================================================================
+     */
+    function syncViewportHeight() {
+      const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      document.documentElement.style.setProperty('--app-height', `${vh}px`);
+    }
+    syncViewportHeight();
+    window.addEventListener('resize', syncViewportHeight);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncViewportHeight);
+    }
+
+    /**
+     * ============================================================================
+     * Web Audio API 효과음 합성기 (iOS/macOS Safari 무음 스위치 및 오디오 잠금 해제 대응)
+     * ============================================================================
+     */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+        this.unlocked = false;
+
+        // iOS Safari에서 측면 무음 스위치가 켜져 있어도 웹 오디오가 출력되도록 오디오 세션을 Playback으로 승격시키는 무음 WAV
+        this.silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+        this.silentAudio.setAttribute('playsinline', '');
+        this.silentAudio.preload = 'auto';
+      }
+
+      // Safari에서는 반드시 사용자 터치 이벤트 핸들러 내부에서 동기적으로 호출해야 함
+      unlock() {
+        try {
+          if (this.silentAudio) {
+            const p = this.silentAudio.play();
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+          }
+
+          if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+              this.ctx = new AudioCtx();
+            }
+          }
+          if (!this.ctx) return;
+
+          if (this.ctx.state !== 'running') {
+            this.ctx.resume().catch(() => {});
+          }
+
+          // iOS Safari 오디오 하드웨어 활성화를 위한 1샘플 무음 버퍼 재생
+          if (!this.unlocked) {
+            const buffer = this.ctx.createBuffer(1, 1, 22050);
+            const source = this.ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(this.ctx.destination);
+            source.start(0);
+            this.unlocked = true;
+          }
+        } catch (e) {
+          // 오디오 초기화 실패 시 무음 폴백
+        }
+      }
+
+      ensureRunning() {
+        if (!this.ctx) this.unlock();
+        if (this.ctx && this.ctx.state !== 'running') {
+          this.ctx.resume().catch(() => {});
+        }
+      }
+
+      init() {
+        this.unlock();
+      }
+
+      toggleMute() {
+        this.unlock();
+        this.muted = !this.muted;
+        return this.muted;
+      }
+
+      // 키보드 Alt+Tab 전환 타건음
+      playAltTab(toDistract) {
+        if (this.muted) return;
+        this.ensureRunning();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(toDistract ? 520 : 760, now);
+        osc.frequency.exponentialRampToValueAtTime(toDistract ? 840 : 320, now + 0.055);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.065);
+      }
+
+      // 점수 획득 틱 사운드 (배율에 따라 피치 상승)
+      playScoreTick(multiplier) {
+        if (this.muted) return;
+        this.ensureRunning();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        const baseFreq = multiplier === 3 ? 880 : multiplier === 2 ? 660 : 520;
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.15, now + 0.04);
+        gain.gain.setValueAtTime(0.11, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.05);
+      }
+
+      // 배율 레벨업 효과음 (x2, x3)
+      playMultiplierUp(level) {
+        if (this.muted) return;
+        this.ensureRunning();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const notes = level === 3 ? [659.25, 880, 1174.66] : [523.25, 783.99];
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+          gain.gain.setValueAtTime(0.2, now + idx * 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.14);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.06);
+          osc.stop(now + idx * 0.06 + 0.15);
+        });
+      }
+
+      // 카톡/메시지 말풍선 팝 사운드
+      playChatPop() {
+        if (this.muted) return;
+        this.ensureRunning();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(420, now);
+        osc.frequency.exponentialRampToValueAtTime(740, now + 0.045);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.055);
+      }
+
+      // 예고 신호: 심장박동 + 발소리 (두근!)
+      playHeartbeat() {
+        if (this.muted) return;
+        this.ensureRunning();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+
+        // 첫 번째 박동 (Lub)
+        const osc1 = this.ctx.createOscillator();
+        const gain1 = this.ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(110, now);
+        osc1.frequency.exponentialRampToValueAtTime(42, now + 0.12);
+        gain1.gain.setValueAtTime(0.38, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+        osc1.connect(gain1);
+        gain1.connect(this.ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.14);
+
+        // 두 번째 박동 (Dub)
+        const osc2 = this.ctx.createOscillator();
+        const gain2 = this.ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(92, now + 0.15);
+        osc2.frequency.exponentialRampToValueAtTime(36, now + 0.27);
+        gain2.gain.setValueAtTime(0.32, now + 0.15);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+        osc2.connect(gain2);
+        gain2.connect(this.ctx.destination);
+        osc2.start(now + 0.15);
+        osc2.stop(now + 0.29);
+      }
+
+      // 페이크 간파 안도 효과음
+      playFakeRelief() {
+        if (this.muted) return;
+        this.ensureRunning();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(392, now);
+        osc.frequency.exponentialRampToValueAtTime(523.25, now + 0.14);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.17);
+      }
+
+      // 들켰을 때 충격음 (게임오버)
+      playCaught() {
+        if (this.muted) return;
+        this.ensureRunning();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [150, 110].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+          osc.frequency.exponentialRampToValueAtTime(48, now + idx * 0.08 + 0.35);
+          gain.gain.setValueAtTime(0.3, now + idx * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.38);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 0.4);
+        });
+      }
+
+      // 90초 버티기 성공: 종강 차임벨
+      playWinBell() {
+        if (this.muted) return;
+        this.ensureRunning();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const melody = [523.25, 659.25, 783.99, 1046.5];
+        melody.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+          gain.gain.setValueAtTime(0.24, now + idx * 0.14);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.4);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.14);
+          osc.stop(now + idx * 0.14 + 0.42);
+        });
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    /**
+     * ============================================================================
+     * 중앙대 캠퍼스 디테일 데이터 (칠판 판서 & 노트북 슬라이드 100% 동기화)
+     * ============================================================================
+     */
+    const LECTURE_SLIDES = [
+      {
+        weekBadge: "교양필수 · 11주차 강의안",
+        boardHeader: "[교양필수] 11주차 · 조선 후기 수취 체제",
+        boardBullets: [
+          "· 대동법: 토지 결수 기준 쌀·베·동전 징수",
+          "· 균역법: 군포 1필 감면 및 결작 보충"
+        ],
+        title: "조선 후기 수취 체제의 개편과 사회 변동",
+        bullets: [
+          "<strong>대동법의 실시:</strong> 공납의 폐단(방납)을 시정하기 위해 토지 결수에 따라 쌀·베·동전으로 징수함.",
+          "<strong>균역법(영조):</strong> 농민의 군포 부담을 1년 2필에서 1필로 줄이고, 부족분은 결작 등으로 보충함.",
+          "<strong>상품 화폐 경제:</strong> 모내기법(이앙법) 확산으로 생산력이 증대되고 상평통보가 전국적으로 유통됨."
+        ]
+      },
+      {
+        weekBadge: "교양필수 · 4주차 강의안",
+        boardHeader: "[교양필수] 4주차 · 삼국의 중앙 집권화",
+        boardBullets: [
+          "· 율령 반포: 소수림왕·법흥왕 통치 체제 정비",
+          "· 불교 공인: 왕권 강화 및 사상 통합 기반"
+        ],
+        title: "삼국 시대의 중앙 집권화와 불교 수용",
+        bullets: [
+          "<strong>율령 반포:</strong> 고구려 소수림왕과 신라 법흥왕 대에 율령을 반포하여 통치 체제를 정비함.",
+          "<strong>불교의 공인:</strong> 왕실의 권위를 높이고 백성의 사상을 통합하는 이념적 기반이 됨.",
+          "<strong>관등제 정비:</strong> 골품제와 관등제를 결합하여 귀족 세력을 중앙 관료 체제 내로 편입함."
+        ]
+      },
+      {
+        weekBadge: "교양필수 · 7주차 강의안",
+        boardHeader: "[교양필수] 7주차 · 고려 문벌 귀족 사회",
+        boardBullets: [
+          "· 과거제(광종)와 음서 제도의 병행 운영",
+          "· 전시과: 관직 복무 대가로 수조권 지급"
+        ],
+        title: "고려 전기 문벌 귀족 사회의 성립과 동요",
+        bullets: [
+          "<strong>과거제와 음서:</strong> 광종 대 쌍기의 건의로 과거제를 시행하였으나, 문벌 귀족은 음서로 특권을 유지함.",
+          "<strong>전시과 제도:</strong> 관직 복무의 대가로 전지와 시지를 지급하되, 수조권만 부여하여 국가 지배력을 유지함.",
+          "<strong>묘청의 서경 천도 운동:</strong> 풍수지리설과 칭제건원을 내세우며 개경 문벌 귀족 세력과 대립함."
+        ]
+      }
+    ];
+
+    const KAKAO_CHAT_POOL = [
+      { sender: "동기A", text: "배고프다... 강의 끝나고 뭐 먹지? 😭" },
+      { sender: "동기B", text: "오늘 참슬기 학식 메뉴 뭐 나왔냐" },
+      { sender: "동기A", text: "310관 엘베 아까 1층까지 줄 서 있더라 ㅋㅋ" },
+      { sender: "동기C", text: "중도 옆 길 은행 냄새 오늘 진짜 역대급임 🍂" },
+      { sender: "동기B", text: "아아 한 잔 더 마셔야 버틸 수 있을 듯 ☕" },
+      { sender: "동기A", text: "205관 공사 소리 여기까지 들리는 거 실화?" },
+      { sender: "동기C", text: "교수님 오늘 진도 엄청 빨리 나가시네" },
+      { sender: "동기B", text: "끝나고 중문 쪽 가서 제육 먹을 사람 🙋‍♂️" },
+      { sender: "동기A", text: "팀플 자료 취합 내일까지인 거 기억하지?" },
+      { sender: "동기C", text: "졸려 죽겠다... 눈 감기면 깨워줘 💤" }
+    ];
+
+    const GEMINI_CHAT_POOL = [
+      { role: "user", text: "한국사 대동법 핵심 1줄로 요약해줘" },
+      { role: "ai", text: "집집마다 특산물을 걷던 공납을 토지 면적 기준(쌀·베·동전)으로 바꾼 조세 개혁입니다! ✨" },
+      { role: "user", text: "교수님한테 안 들키고 딴짓하는 팁 알려줘" },
+      { role: "ai", text: "발소리와 화면 붉은 신호가 뜨면 0.5초 안에 즉시 손을 떼세요! 👀" },
+      { role: "user", text: "흑석동 점심 메뉴 3개만 추천해줘" },
+      { role: "ai", text: "1) 310관 학식 돈가스 2) 중문 앞 김치찌개 3) 청룡연못 뷰 샌드위치 🍱" }
+    ];
+
+    const PROF_CAUGHT_LINES = [
+      "“전부 노트북 닫으세요.”",
+      "“학생, 이름과 학번이 어떻게 되죠?”",
+      "“거기 학생, 지금 무슨 내용인지 이해한 것을 발표해 봅시다.”"
+    ];
+
+    /**
+     * ============================================================================
+     * 게임 상태 관리 (localStorage 최고기록 저장, 오류 시 메모리 폴백)
+     * ============================================================================
+     */
+    const ROUND_DURATION = 90.0; // 한 판 90초
+    const BEST_SCORE_KEY = 'cau_alttab_pokerface_best';
+
+    function loadBestScore() {
+      try {
+        const saved = window.localStorage.getItem(BEST_SCORE_KEY);
+        const parsed = parseInt(saved, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    function saveBestScore(score) {
+      try {
+        window.localStorage.setItem(BEST_SCORE_KEY, String(score));
+      } catch (e) {
+        // 저장소 접근 불가 환경 무시
+      }
+    }
+
+    let bestScore = loadBestScore();
+    let restartUnlockTime = 0;
+
+    const state = {
+      status: 'START', // 'START' | 'PLAYING' | 'CAUGHT' | 'WIN'
+      isHolding: false,
+      elapsed: 0,
+      score: 0,
+      holdDuration: 0,
+      multiplier: 1,
+
+      // 교수님 AI 상태: 'WRITING' | 'WARNING' | 'LOOKING' | 'FAKE_RELIEF'
+      profState: 'WRITING',
+      profTimer: 0,
+      profNextDuration: 3.5,
+      isCurrentTurnFake: false,
+
+      // 주기적 틱 타이머
+      scoreTickAccum: 0,
+      chatTickAccum: 0,
+      heartbeatAccum: 0,
+      slideTimer: 0,
+      slideIndex: 0,
+
+      // 앱 창 인덱스
+      kakaoIndex: 0,
+      geminiIndex: 0,
+      activeApp: 'KAKAO', // 'KAKAO' | 'GEMINI' | 'GAME'
+      lastChosenApp: ''
+    };
+
+    // DOM 참조
+    const el = {
+      gameContainer: document.getElementById('gameContainer'),
+      dangerOverlay: document.getElementById('dangerOverlay'),
+      floatingLayer: document.getElementById('floatingLayer'),
+      classroomArea: document.getElementById('classroomArea'),
+      boardHeader: document.getElementById('boardHeader'),
+      boardBullet1: document.getElementById('boardBullet1'),
+      boardBullet2: document.getElementById('boardBullet2'),
+      timerText: document.getElementById('timerText'),
+      muteBtn: document.getElementById('muteBtn'),
+
+      profContainer: document.getElementById('professorContainer'),
+      warningGaugeWrap: document.getElementById('warningGaugeWrap'),
+      warningGaugeBar: document.getElementById('warningGaugeBar'),
+      profBubble: document.getElementById('profBubble'),
+      profBubbleIcon: document.getElementById('profBubbleIcon'),
+      profBubbleText: document.getElementById('profBubbleText'),
+      warningRing: document.getElementById('warningRing'),
+      profAvatar: document.getElementById('profAvatar'),
+      profFace: document.getElementById('profFace'),
+      profGlare: document.getElementById('profGlare'),
+
+      scoreText: document.getElementById('scoreText'),
+      multGaugeBar: document.getElementById('multGaugeBar'),
+      multBadge: document.getElementById('multBadge'),
+
+      lectureScreen: document.getElementById('lectureScreen'),
+      slideWeekBadge: document.getElementById('slideWeekBadge'),
+      slideTitle: document.getElementById('slideTitle'),
+      slideBullets: document.getElementById('slideBullets'),
+
+      distractScreen: document.getElementById('distractScreen'),
+      windowTitle: document.getElementById('windowTitle'),
+      distractStatusBadge: document.getElementById('distractStatusBadge'),
+      appKakao: document.getElementById('appKakao'),
+      kakaoMessages: document.getElementById('kakaoMessages'),
+      appGemini: document.getElementById('appGemini'),
+      geminiMessages: document.getElementById('geminiMessages'),
+      appMiniGame: document.getElementById('appMiniGame'),
+      osStatusText: document.getElementById('osStatusText'),
+
+      startOverlay: document.getElementById('startOverlay'),
+      startBtn: document.getElementById('startBtn'),
+      endOverlay: document.getElementById('endOverlay'),
+      endBadge: document.getElementById('endBadge'),
+      endMessage: document.getElementById('endMessage'),
+      gradeLetter: document.getElementById('gradeLetter'),
+      gradeTitle: document.getElementById('gradeTitle'),
+      finalScore: document.getElementById('finalScore'),
+      bestScoreText: document.getElementById('bestScoreText'),
+      restartBtn: document.getElementById('restartBtn')
+    };
+
+    /**
+     * ============================================================================
+     * 브라우저 기본 길게 누르기 메뉴, 스크롤, 텍스트 선택 원천 차단
+     * ============================================================================
+     */
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('selectstart', (e) => e.preventDefault());
+    document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+    /**
+     * ============================================================================
+     * UI 및 연출 헬퍼 함수
+     * ============================================================================
+     */
+    function spawnFloatingText(text, colorClass = 'text-amber-300') {
+      const badge = document.createElement('div');
+      badge.className = `px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-white/20 font-black text-sm shadow-lg animate-float-bonus ${colorClass}`;
+      badge.textContent = text;
+      el.floatingLayer.appendChild(badge);
+      setTimeout(() => badge.remove(), 950);
+    }
+
+    function updateLectureSlide() {
+      const slide = LECTURE_SLIDES[state.slideIndex % LECTURE_SLIDES.length];
+      // 칠판 판서 동기화
+      el.boardHeader.textContent = slide.boardHeader;
+      el.boardBullet1.textContent = slide.boardBullets[0];
+      el.boardBullet2.textContent = slide.boardBullets[1];
+
+      // 노트북 슬라이드 동기화
+      el.slideWeekBadge.textContent = slide.weekBadge;
+      el.slideTitle.textContent = slide.title;
+      el.slideBullets.innerHTML = slide.bullets.map((b, idx) => `
+        <li class="flex items-start gap-2">
+          <span class="text-blue-800 font-bold">${idx + 1}.</span>
+          <span>${b}</span>
+        </li>
+      `).join('');
+    }
+
+    function appendKakaoBubble() {
+      const item = KAKAO_CHAT_POOL[state.kakaoIndex % KAKAO_CHAT_POOL.length];
+      state.kakaoIndex++;
+
+      const row = document.createElement('div');
+      row.className = 'flex flex-col items-start animate-[scorePop_0.15s_ease-out]';
+      row.innerHTML = `
+        <span class="text-[10px] font-bold text-slate-700 mb-0.5 ml-1">${item.sender}</span>
+        <div class="bg-white text-slate-900 text-xs font-medium px-3 py-1.5 rounded-2xl rounded-tl-none shadow-sm max-w-[88%]">
+          ${item.text}
+        </div>
+      `;
+      el.kakaoMessages.appendChild(row);
+      while (el.kakaoMessages.children.length > 4) {
+        el.kakaoMessages.removeChild(el.kakaoMessages.firstChild);
+      }
+      sound.playChatPop();
+    }
+
+    function appendGeminiBubble() {
+      const item = GEMINI_CHAT_POOL[state.geminiIndex % GEMINI_CHAT_POOL.length];
+      state.geminiIndex++;
+
+      const row = document.createElement('div');
+      if (item.role === 'user') {
+        row.className = 'self-end bg-blue-600 text-white text-xs font-medium px-3 py-1.5 rounded-2xl rounded-tr-none max-w-[85%] shadow';
+        row.textContent = item.text;
+      } else {
+        row.className = 'self-start bg-slate-800 border border-slate-700 text-slate-100 text-xs leading-relaxed px-3 py-2 rounded-2xl rounded-tl-none max-w-[90%] shadow';
+        row.innerHTML = `<span class="text-sky-400 font-bold mr-1">✦ Gemini:</span>${item.text}`;
+      }
+      el.geminiMessages.appendChild(row);
+      while (el.geminiMessages.children.length > 3) {
+        el.geminiMessages.removeChild(el.geminiMessages.firstChild);
+      }
+      sound.playChatPop();
+    }
+
+    // 한 번의 딴짓 세션마다 카톡·제미나이·청룡 미니게임 중 1개를 랜덤 선택하여 유지
+    function chooseAndShowRandomDistractApp() {
+      const apps = ['KAKAO', 'GEMINI', 'GAME'];
+      const candidates = apps.filter(app => app !== state.lastChosenApp);
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+
+      state.activeApp = chosen;
+      state.lastChosenApp = chosen;
+
+      el.appKakao.classList.add('hidden');
+      el.appGemini.classList.add('hidden');
+      el.appMiniGame.classList.add('hidden');
+
+      if (chosen === 'KAKAO') {
+        el.appKakao.classList.remove('hidden');
+        el.windowTitle.textContent = '💬 동기 카톡방 (4)';
+        el.osStatusText.textContent = 'KakaoTalk - 동기 단톡방';
+        appendKakaoBubble();
+      } else if (chosen === 'GEMINI') {
+        el.appGemini.classList.remove('hidden');
+        el.windowTitle.textContent = '✦ Gemini - AI 어시스턴트';
+        el.osStatusText.textContent = 'Chrome - Gemini';
+        appendGeminiBubble();
+      } else {
+        el.appMiniGame.classList.remove('hidden');
+        el.windowTitle.textContent = '🎮 청룡 점프 (웹게임)';
+        el.osStatusText.textContent = 'Chrome - 청룡 점프';
+      }
+    }
+
+    // 누르기 / 떼기 화면 전환
+    function setHolding(holding) {
+      if (state.status !== 'PLAYING') return;
+      if (state.isHolding === holding) return;
+
+      state.isHolding = holding;
+      sound.playAltTab(holding);
+
+      if (holding) {
+        // 누르는 순간 랜덤하게 1개의 딴짓 앱을 띄우고 손을 뗄 때까지 유지
+        el.lectureScreen.classList.add('hidden');
+        el.distractScreen.classList.remove('hidden');
+        state.chatTickAccum = 0;
+        updateDistractStatusUI();
+        chooseAndShowRandomDistractApp();
+      } else {
+        // 즉시 강의 슬라이드로 복귀 & 배율 초기화
+        const currentSlide = LECTURE_SLIDES[state.slideIndex % LECTURE_SLIDES.length];
+        el.distractScreen.classList.add('hidden');
+        el.lectureScreen.classList.remove('hidden');
+        el.osStatusText.textContent = `${currentSlide.title.slice(0, 12)}_강의안.pdf`;
+
+        state.holdDuration = 0;
+        state.multiplier = 1;
+        updateDistractStatusUI();
+        updateMultiplierUI(false);
+      }
+    }
+
+    function updateDistractStatusUI() {
+      if (state.isHolding && state.profState === 'WARNING') {
+        el.distractStatusBadge.className = 'text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow animate-bounce';
+        el.distractStatusBadge.textContent = '💓 강심장 보너스 x2!';
+      } else {
+        el.distractStatusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white animate-pulse';
+        el.distractStatusBadge.textContent = '딴짓 중 +점수!';
+      }
+    }
+
+    function updateMultiplierUI(burst) {
+      el.multBadge.textContent = `x${state.multiplier}`;
+
+      if (state.multiplier === 1) {
+        el.multBadge.className = 'px-2.5 py-0.5 rounded-md text-xs font-black bg-slate-700 text-slate-200 tabular-nums';
+      } else if (state.multiplier === 2) {
+        el.multBadge.className = 'px-2.5 py-0.5 rounded-md text-xs font-black bg-amber-400 text-slate-950 tabular-nums shadow';
+      } else {
+        el.multBadge.className = 'px-2.5 py-0.5 rounded-md text-xs font-black bg-gradient-to-r from-rose-500 to-amber-400 text-white tabular-nums shadow-md';
+      }
+
+      if (burst) {
+        el.multBadge.classList.remove('animate-badge-burst');
+        void el.multBadge.offsetWidth;
+        el.multBadge.classList.add('animate-badge-burst');
+      }
+
+      // 게이지 바 (3.5초에 x3 최대 배율 달성)
+      const pct = Math.min(100, (state.holdDuration / 3.5) * 100);
+      el.multGaugeBar.style.width = `${pct}%`;
+    }
+
+    function updateScoreUI(pop) {
+      el.scoreText.textContent = state.score.toLocaleString();
+      if (pop) {
+        el.scoreText.classList.remove('animate-score-pop');
+        void el.scoreText.offsetWidth;
+        el.scoreText.classList.add('animate-score-pop');
+      }
+    }
+
+    /**
+     * ============================================================================
+     * 교수님 상태 전이 및 난이도 곡선 (첫 10초 긴 예고 + 갈수록 짧아지는 예고 + 페이크)
+     * ============================================================================
+     */
+    function setProfessorState(newState) {
+      state.profState = newState;
+      state.profTimer = 0;
+
+      // 초기화
+      el.warningGaugeWrap.classList.add('hidden');
+      el.warningRing.classList.add('hidden');
+      el.profGlare.classList.add('hidden');
+      el.profAvatar.style.transform = '';
+      el.dangerOverlay.classList.remove('danger-vignette-active');
+      el.dangerOverlay.style.opacity = '0';
+      el.profBubble.classList.remove('animate-exclaim');
+      updateDistractStatusUI();
+
+      if (newState === 'WRITING') {
+        // 판서 중 (안전 구간)
+        el.classroomArea.className = 'relative h-[34%] min-h-[185px] max-h-[250px] shrink-0 w-full bg-gradient-to-b from-amber-50 via-stone-100 to-stone-200 border-b-4 border-slate-800 flex flex-col justify-between p-2.5 sm:p-3 overflow-hidden transition-colors duration-200';
+        el.profFace.textContent = '👨‍🏫';
+        el.profAvatar.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-amber-100 border-4 border-slate-800 shadow-lg flex items-center justify-center text-3xl sm:text-4xl relative transition-transform duration-150';
+        el.profBubble.className = 'mb-1 px-3 py-1 rounded-full text-xs font-extrabold shadow-md bg-white text-slate-700 border border-slate-200 flex items-center gap-1 whitespace-nowrap';
+        el.profBubbleIcon.textContent = '✍️';
+        el.profBubbleText.textContent = '칠판 판서 중...';
+
+        // x3 배율(1.8초)을 충분히 누릴 수 있도록 여유 있는 판서 시간 제공
+        if (state.elapsed < 15) {
+          state.profNextDuration = 4.0;
+        } else {
+          const progress = Math.min(1, state.elapsed / ROUND_DURATION);
+          const minWait = 2.6 - progress * 0.4;
+          const maxWait = 4.4 - progress * 0.8;
+          state.profNextDuration = minWait + Math.random() * (maxWait - minWait);
+        }
+
+      } else if (newState === 'WARNING') {
+        // 돌아보기 전 예고 신호 (발소리, 느낌표, 화면 가장자리 붉어짐, 심장박동, 카운트다운 게이지)
+        el.classroomArea.className = 'relative h-[34%] min-h-[185px] max-h-[250px] shrink-0 w-full bg-gradient-to-b from-rose-100 via-red-100 to-rose-200 border-b-4 border-rose-700 flex flex-col justify-between p-2.5 sm:p-3 overflow-hidden transition-colors duration-150';
+        el.profFace.textContent = '🤔';
+        el.profAvatar.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-rose-200 border-4 border-rose-600 shadow-lg flex items-center justify-center text-3xl sm:text-4xl relative';
+        el.warningRing.classList.remove('hidden');
+
+        el.warningGaugeWrap.classList.remove('hidden');
+        el.warningGaugeBar.style.width = '100%';
+        el.warningGaugeBar.className = 'h-full w-full bg-amber-300 rounded-full';
+
+        el.profBubble.className = 'mb-1 px-3.5 py-1 rounded-full text-xs font-black shadow-lg bg-rose-600 text-white border-2 border-white flex items-center gap-1 whitespace-nowrap animate-exclaim';
+        el.profBubbleIcon.textContent = '❗';
+        el.profBubbleText.textContent = '👣 뚜벅... 돌아보려 함!';
+
+        el.dangerOverlay.classList.add('danger-vignette-active');
+        el.dangerOverlay.style.opacity = '1';
+
+        sound.playHeartbeat();
+        state.heartbeatAccum = 0;
+        updateDistractStatusUI();
+
+        if (state.isHolding) {
+          spawnFloatingText('💓 강심장 보너스 x2 발동!', 'text-amber-300');
+        }
+
+        // 초반 15초는 여유로운 예고(2.6초), 이후 0.7~1.6초 범위에서 후반일수록 짧은 쪽이 자주 등장 (0.5초 미만 금지)
+        if (state.elapsed < 15) {
+          state.profNextDuration = 2.6;
+          state.isCurrentTurnFake = false;
+        } else {
+          const progress = Math.min(1, (state.elapsed - 15) / (ROUND_DURATION - 15));
+          const skew = 1 + progress * 1.4;
+          const randomFactor = Math.pow(Math.random(), skew);
+          state.profNextDuration = Math.max(0.7, 0.7 + randomFactor * 0.9);
+          state.isCurrentTurnFake = state.elapsed >= 18 && Math.random() < 0.25;
+        }
+
+      } else if (newState === 'FAKE_RELIEF') {
+        // 페이크 연출: 돌아보는 척만 하고 다시 칠판으로!
+        el.classroomArea.className = 'relative h-[34%] min-h-[185px] max-h-[250px] shrink-0 w-full bg-gradient-to-b from-emerald-50 via-teal-50 to-stone-200 border-b-4 border-slate-800 flex flex-col justify-between p-2.5 sm:p-3 overflow-hidden transition-colors duration-200';
+        el.profFace.textContent = '😅';
+        el.profAvatar.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-emerald-100 border-4 border-emerald-600 shadow-lg flex items-center justify-center text-3xl sm:text-4xl relative';
+        el.profBubble.className = 'mb-1 px-3 py-1 rounded-full text-xs font-extrabold shadow-md bg-emerald-600 text-white flex items-center gap-1 whitespace-nowrap';
+        el.profBubbleIcon.textContent = '💨';
+        el.profBubbleText.textContent = '휴... 페이크! (분필 줍는 중)';
+
+        sound.playFakeRelief();
+
+        // 페이크에도 속지 않고 딴짓을 유지 중이었다면 현재 배율에 비례한 보너스 지급
+        if (state.isHolding) {
+          const fakeBonus = 300 * state.multiplier;
+          state.score += fakeBonus;
+          updateScoreUI(true);
+          spawnFloatingText(`😎 페이크 간파 (x${state.multiplier})! +${fakeBonus}`, 'text-emerald-300');
+        }
+
+        state.profNextDuration = 0.85;
+
+      } else if (newState === 'LOOKING') {
+        // 실제 감시 중!
+        el.classroomArea.className = 'relative h-[34%] min-h-[185px] max-h-[250px] shrink-0 w-full bg-gradient-to-b from-slate-800 via-slate-700 to-slate-800 border-b-4 border-rose-600 flex flex-col justify-between p-2.5 sm:p-3 overflow-hidden transition-colors duration-100';
+        el.profFace.textContent = '🧐';
+        el.profAvatar.className = 'w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-amber-200 border-4 border-rose-500 shadow-xl flex items-center justify-center text-3xl sm:text-4xl relative scale-110';
+        el.profGlare.classList.remove('hidden');
+
+        el.profBubble.className = 'mb-1 px-3.5 py-1 rounded-full text-xs font-black shadow-lg bg-amber-400 text-slate-950 flex items-center gap-1 whitespace-nowrap';
+        el.profBubbleIcon.textContent = '👁️';
+        el.profBubbleText.textContent = '강의실 스캔 중...';
+
+        state.profNextDuration = 0.95;
+      }
+    }
+
+    /**
+     * ============================================================================
+     * 학점(칭호) 계산 (중앙대 F, D, C, B, A, A+ 체제 · 플레이 리스크 기반 커트라인)
+     * ============================================================================
+     */
+    function calculateGrade(score, isWin) {
+      if (score >= 65000) {
+        return { letter: 'A+', title: '4.5 만점의 전설 · 310관 강심장 마스터' };
+      } else if (score >= 43000) {
+        return { letter: 'A', title: '포커페이스 장인 · 완벽한 이중생활' };
+      } else if (score >= 28000) {
+        return { letter: 'B', title: '눈치 백단 모범생 · 안정적인 학점 방어' };
+      } else if (score >= 16000) {
+        return { letter: 'C', title: '평범한 생존자 · 출석에 의의를 둠' };
+      } else if (score >= 6000) {
+        return { letter: 'D', title: '학사경고 턱걸이 · 간신히 살아남음' };
+      } else {
+        return {
+          letter: 'F',
+          title: isWin ? '너무 성실해서 점수 부족 · 재수강 위기' : '재수강 확정 · 교수님 연구실 호출'
+        };
+      }
+    }
+
+    /**
+     * ============================================================================
+     * 게임 시작, 게임오버, 종강 엔딩 처리
+     * ============================================================================
+     */
+    function startGame() {
+      sound.unlock();
+
+      state.status = 'PLAYING';
+      state.isHolding = false;
+      state.elapsed = 0;
+      state.score = 0;
+      state.holdDuration = 0;
+      state.multiplier = 1;
+      state.scoreTickAccum = 0;
+      state.chatTickAccum = 0;
+      state.heartbeatAccum = 0;
+      state.slideTimer = 0;
+      state.slideIndex = 0;
+      state.kakaoIndex = 0;
+      state.geminiIndex = 0;
+      state.lastChosenApp = '';
+
+      el.kakaoMessages.innerHTML = '';
+      el.geminiMessages.innerHTML = '';
+      el.distractScreen.classList.add('hidden');
+      el.lectureScreen.classList.remove('hidden');
+      el.startOverlay.classList.add('hidden');
+      el.endOverlay.classList.add('hidden');
+      el.timerText.textContent = `${ROUND_DURATION.toFixed(1)}s`;
+
+      updateLectureSlide();
+      updateScoreUI(false);
+      updateMultiplierUI(false);
+      setProfessorState('WRITING');
+    }
+
+    function triggerGameOver() {
+      state.status = 'CAUGHT';
+      state.isHolding = false;
+
+      sound.playCaught();
+
+      // 화면 흔들림 연출
+      el.gameContainer.classList.remove('animate-caught-shake');
+      void el.gameContainer.offsetWidth;
+      el.gameContainer.classList.add('animate-caught-shake');
+
+      el.dangerOverlay.classList.remove('danger-vignette-active');
+      el.dangerOverlay.style.opacity = '0';
+
+      if (state.score > bestScore) {
+        bestScore = state.score;
+        saveBestScore(bestScore);
+      }
+
+      const grade = calculateGrade(state.score, false);
+      const randomLine = PROF_CAUGHT_LINES[Math.floor(Math.random() * PROF_CAUGHT_LINES.length)];
+
+      el.endBadge.className = 'px-4 py-1.5 rounded-full text-xs font-black mb-3 bg-rose-600 text-white';
+      el.endBadge.textContent = '🚨 교수님과 눈이 마주쳤다!';
+      el.endMessage.textContent = randomLine;
+      el.gradeLetter.textContent = grade.letter;
+      el.gradeLetter.className = grade.letter === 'F'
+        ? 'text-6xl font-black text-rose-500'
+        : 'text-6xl font-black text-amber-400';
+      el.gradeTitle.textContent = grade.title;
+      el.finalScore.textContent = state.score.toLocaleString();
+      el.bestScoreText.textContent = bestScore.toLocaleString();
+
+      setTimeout(() => {
+        restartUnlockTime = performance.now() + 700;
+        el.restartBtn.classList.add('opacity-60');
+        el.endOverlay.classList.remove('hidden');
+        setTimeout(() => el.restartBtn.classList.remove('opacity-60'), 700);
+      }, 380);
+    }
+
+    function triggerWinEnding() {
+      state.status = 'WIN';
+      state.isHolding = false;
+
+      // 무사 종강 보너스 +2,000점
+      state.score += 2000;
+      sound.playWinBell();
+
+      el.dangerOverlay.classList.remove('danger-vignette-active');
+      el.dangerOverlay.style.opacity = '0';
+
+      if (state.score > bestScore) {
+        bestScore = state.score;
+        saveBestScore(bestScore);
+      }
+
+      const grade = calculateGrade(state.score, true);
+
+      el.endBadge.className = 'px-4 py-1.5 rounded-full text-xs font-black mb-3 bg-emerald-500 text-slate-950';
+      el.endBadge.textContent = '🎉 90초 완주 · 무사 종강!';
+      el.endMessage.textContent = '“한 학기 동안 수고 많았습니다. 종강을 축하합니다!” (+2,000 보너스)';
+      el.gradeLetter.textContent = grade.letter;
+      el.gradeLetter.className = 'text-6xl font-black text-emerald-400';
+      el.gradeTitle.textContent = grade.title;
+      el.finalScore.textContent = state.score.toLocaleString();
+      el.bestScoreText.textContent = bestScore.toLocaleString();
+
+      restartUnlockTime = performance.now() + 700;
+      el.restartBtn.classList.add('opacity-60');
+      el.endOverlay.classList.remove('hidden');
+      setTimeout(() => el.restartBtn.classList.remove('opacity-60'), 700);
+    }
+
+    /**
+     * ============================================================================
+     * 메인 게임 루프 (requestAnimationFrame)
+     * ============================================================================
+     */
+    let lastTimestamp = null;
+
+    function gameLoop(timestamp) {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
+      lastTimestamp = timestamp;
+
+      if (state.status === 'PLAYING') {
+        // 1. 전체 90초 타이머 진행
+        state.elapsed += dt;
+        const remaining = Math.max(0, ROUND_DURATION - state.elapsed);
+        el.timerText.textContent = `${remaining.toFixed(1)}s`;
+
+        if (remaining <= 10) {
+          el.timerText.classList.add('text-rose-600');
+        } else {
+          el.timerText.classList.remove('text-rose-600');
+        }
+
+        if (remaining <= 0) {
+          triggerWinEnding();
+          requestAnimationFrame(gameLoop);
+          return;
+        }
+
+        // 2. 안전 상태일 때 강의 슬라이드 주기적 교체 (14초마다)
+        if (!state.isHolding) {
+          state.slideTimer += dt;
+          if (state.slideTimer >= 14) {
+            state.slideTimer = 0;
+            state.slideIndex++;
+            updateLectureSlide();
+          }
+        }
+
+        // 3. 누르고 있을 때 (딴짓 중): 연속 시간 누적, 배율 상승, 점수 증가
+        // 3. 누르고 있을 때 (딴짓 중): 연속 시간 누적, 배율 상승, 점수 증가 (선택된 1개 앱 유지)
+        if (state.isHolding) {
+          state.holdDuration += dt;
+
+          // 배율 단계 계산 (1.5초에 x2, 3.5초에 x3)
+          let newMult = 1;
+          if (state.holdDuration >= 3.5) newMult = 3;
+          else if (state.holdDuration >= 1.5) newMult = 2;
+
+          if (newMult > state.multiplier) {
+            state.multiplier = newMult;
+            sound.playMultiplierUp(newMult);
+            updateMultiplierUI(true);
+            spawnFloatingText(
+              newMult === 3 ? '🔥 x3 FEVER 배율!' : '⚡ x2 배율 상승!',
+              newMult === 3 ? 'text-rose-400' : 'text-amber-300'
+            );
+          } else {
+            updateMultiplierUI(false);
+          }
+
+          // 0.1초마다 점수 틱 증가 (예고 중 홀드 시 강심장 보너스로 2배 획득)
+          state.scoreTickAccum += dt;
+          if (state.scoreTickAccum >= 0.1) {
+            state.scoreTickAccum -= 0.1;
+            const basePoints = state.multiplier === 3 ? 130 : state.multiplier === 2 ? 60 : 25;
+            const isHeartOfSteel = state.profState === 'WARNING';
+            const points = isHeartOfSteel ? basePoints * 2 : basePoints;
+            state.score += points;
+            updateScoreUI(true);
+            sound.playScoreTick(state.multiplier);
+          }
+
+          // 0.85초마다 현재 열린 딴짓 앱(카톡 또는 제미나이)의 대화 한 줄씩 추가
+          state.chatTickAccum += dt;
+          if (state.chatTickAccum >= 0.85) {
+            state.chatTickAccum = 0;
+            if (state.activeApp === 'KAKAO') appendKakaoBubble();
+            else if (state.activeApp === 'GEMINI') appendGeminiBubble();
+          }
+        }
+
+        // 4. 교수님 상태 머신 진행
+        state.profTimer += dt;
+
+        if (state.profState === 'WARNING') {
+          // 예고 남은 시간 비율(1 -> 0) 및 교수님 고개 돌림/게이지 업데이트
+          const warnRatio = Math.max(0, 1 - state.profTimer / state.profNextDuration);
+          const progress = 1 - warnRatio;
+          el.warningGaugeBar.style.width = `${(warnRatio * 100).toFixed(1)}%`;
+          if (warnRatio <= 0.35) {
+            el.warningGaugeBar.className = 'h-full bg-rose-500 rounded-full';
+          } else {
+            el.warningGaugeBar.className = 'h-full bg-amber-300 rounded-full';
+          }
+
+          // 교수님이 점점 돌아보는 시각 연출 (기울기·확대·시선 전환 예고)
+          const tiltDeg = (progress * 14).toFixed(1);
+          const scaleVal = (1.02 + progress * 0.08).toFixed(3);
+          el.profAvatar.style.transform = `scale(${scaleVal}) rotate(${tiltDeg}deg)`;
+          if (warnRatio <= 0.32 && el.profFace.textContent !== '😒') {
+            el.profFace.textContent = '😒';
+          }
+
+          // 예고 중 심장박동 반복 재생 (시간이 줄어들수록 박동도 빨라짐)
+          const beatInterval = Math.max(0.32, state.profNextDuration * 0.42);
+          state.heartbeatAccum += dt;
+          if (state.heartbeatAccum >= beatInterval) {
+            state.heartbeatAccum = 0;
+            sound.playHeartbeat();
+          }
+
+          if (state.profTimer >= state.profNextDuration) {
+            if (state.isCurrentTurnFake) {
+              setProfessorState('FAKE_RELIEF');
+            } else {
+              setProfessorState('LOOKING');
+            }
+          }
+        } else if (state.profState === 'LOOKING') {
+          // 교수님이 쳐다보는 동안 딴짓 창이 떠 있으면 즉시 적발!
+          if (state.isHolding) {
+            triggerGameOver();
+            requestAnimationFrame(gameLoop);
+            return;
+          }
+
+          if (state.profTimer >= state.profNextDuration) {
+            setProfessorState('WRITING');
+          }
+        } else if (state.profState === 'FAKE_RELIEF') {
+          if (state.profTimer >= state.profNextDuration) {
+            setProfessorState('WRITING');
+          }
+        } else if (state.profState === 'WRITING') {
+          if (state.profTimer >= state.profNextDuration) {
+            setProfessorState('WARNING');
+          }
+        }
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    /**
+     * ============================================================================
+     * 입력 이벤트 리스너 (터치, 마우스, 스페이스바)
+     * ============================================================================
+     */
+    // 시작 버튼
+    el.startBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      startGame();
+    });
+
+    // 다시 하기 버튼 (결과 화면 노출 후 0.7초 동안 오입력 방지)
+    el.restartBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      if (performance.now() < restartUnlockTime) return;
+      startGame();
+    });
+
+    // 탭 전환 또는 창 포커스 상실 시 자동으로 손 뗀 상태 처리
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && state.status === 'PLAYING') {
+        setHolding(false);
+      }
+    });
+
+    window.addEventListener('blur', () => {
+      if (state.status === 'PLAYING') {
+        setHolding(false);
+      }
+    });
+
+    // 음소거 버튼
+    el.muteBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      const isMuted = sound.toggleMute();
+      el.muteBtn.textContent = isMuted ? '🔇' : '🔊';
+    });
+
+    // 메인 게임 화면 홀드 & 릴리즈 (모바일 터치 & PC 마우스 통합)
+    el.gameContainer.addEventListener('pointerdown', (e) => {
+      if (state.status !== 'PLAYING') return;
+      sound.unlock();
+      setHolding(true);
+    });
+
+    window.addEventListener('pointerup', () => {
+      if (state.status === 'PLAYING') {
+        setHolding(false);
+      }
+    });
+
+    window.addEventListener('pointercancel', () => {
+      if (state.status === 'PLAYING') {
+        setHolding(false);
+      }
+    });
+
+    // PC 스페이스바 지원 (시작, 재시작 및 딴짓 홀드 동작)
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        if (state.status === 'START') {
+          startGame();
+        } else if (state.status === 'CAUGHT' || state.status === 'WIN') {
+          if (performance.now() >= restartUnlockTime) {
+            startGame();
+          }
+        } else if (state.status === 'PLAYING') {
+          sound.unlock();
+          setHolding(true);
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (state.status === 'PLAYING') {
+          setHolding(false);
+        }
+      }
+    });
+
+    // 애니메이션 루프 시작
+    window.onload = () => {
+      requestAnimationFrame(gameLoop);
+    };
+  </script>
+</body>
+</html>
